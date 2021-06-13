@@ -29,8 +29,8 @@ if __name__ == '__main__':
     query = """
     SELECT TOP {} object, ra, dec, prog_id, instrument, telescope, exp_start, exposure, mjd_obs, dp_cat
     from dbo.raw
-    where ra between {ra_min} and {ra_max}
-      and dec between {dec_min} and {dec_max}
+    where ra between {} and {}
+      and dec between {} and {}
       and dp_cat='SCIENCE'
       and (instrument='ESPRESSO' or instrument='HARPS' or instrument='FEROS')
     """.format(n, ra_min, ra_max, dec_min, dec_max)
