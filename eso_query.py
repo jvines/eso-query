@@ -14,6 +14,7 @@ def arg_parse():
     p.add_argument('radius', help='Box search radius.')
     return p.parse_args()
 
+
 if __name__ == '__main__':
     args = arg_parse()
     ra = float(args.ra) * u.deg
@@ -25,14 +26,14 @@ if __name__ == '__main__':
     dec_max = (dec + radius).value
     n = 100
 
-    query = f"""
-    SELECT TOP {n} object, ra, dec, prog_id, instrument, telescope, exp_start, exposure, mjd_obs, dp_cat
+    query = """
+    SELECT TOP {} object, ra, dec, prog_id, instrument, telescope, exp_start, exposure, mjd_obs, dp_cat
     from dbo.raw
     where ra between {ra_min} and {ra_max}
       and dec between {dec_min} and {dec_max}
       and dp_cat='SCIENCE'
       and (instrument='ESPRESSO' or instrument='HARPS' or instrument='FEROS')
-    """
+    """.format(n, ra_min, ra_max, dec_min, dec_max)
     print(query)
     res = tap_obs.search(query=query)
     print(res)
