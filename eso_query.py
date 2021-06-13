@@ -44,4 +44,4 @@ if __name__ == '__main__':
     out = args.out
 
     res = do_query(n, ra.value, dec.value, radius.value)
-    res.write(f'{out}.dat', format='ascii.ecsv')
+    res.write(f'{out}.dat', format='ascii.ecsv', overwrite=True)
