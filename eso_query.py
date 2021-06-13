@@ -1,6 +1,7 @@
 import argparse
 from pyvo.dal import tap
 from astropy import units as u
+import time
 
 ESO_TAP_OBS = 'http://archive.eso.org/tap_obs'
 tap_obs = tap.TAPService(ESO_TAP_OBS)
@@ -35,6 +36,7 @@ def do_query(n, ra, dec, radius):
 
 
 if __name__ == '__main__':
+    start = time.time()
     verbose = False
     args = arg_parse()
     ra = float(args.ra) * u.deg
@@ -42,10 +44,6 @@ if __name__ == '__main__':
     radius = (float(args.radius) * u.arcmin).to(u.deg)
     n = int(args.n)
     out = args.out
-    ra_min = (ra - radius).value
-    ra_max = (ra + radius).value
-    dec_min = (dec - radius).value
-    dec_max = (dec + radius).value
 
-    res = do_query(n, ra, dec, radius)
+    res = do_query(n, ra.value, dec.value, radius.value)
     res.write(f'{out}.dat', format='ascii.ecsv')
