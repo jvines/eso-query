@@ -44,4 +44,4 @@ if __name__ == '__main__':
     dec_max = (dec + radius).value
 
     res = do_query(n, ra_min, ra_max, dec_min, dec_max)
-    res.write(f'{out}.csv', format='ascii.ecsv')
+    res.write(f'{out}.dat', format='ascii.ecsv')
