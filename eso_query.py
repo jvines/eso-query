@@ -11,29 +11,37 @@ def arg_parse():
     p = argparse.ArgumentParser()
     p.add_argument('ra', help='Target RA in degrees.')
     p.add_argument('dec', help='Target DEC in degrees.')
-    p.add_argument('radius', help='Box search radius.')
+    p.add_argument('radius', help='Box search radius in arcminutes.')
+    p.add_argument('n', help='Max number of rows to retrieve.')
+    p.add_argument('out', help='Output directory.')
     return p.parse_args()
 
 
+def do_query(n, ra_min, ra_max, dec_min, dec_max):
+    query = """
+    SELECT TOP {} target, ra, dec, prog_id, instrument, telescope, exp_start, exposure, mjd_obs, dp_cat, datalink_url
+    from dbo.raw
+    where ra between {} and {}
+    and dec between {} and {}
+    and dp_cat='SCIENCE'
+    and (instrument='ESPRESSO' or instrument='HARPS' or instrument='FEROS')
+    """.format(n, ra_min, ra_max, dec_min, dec_max)
+    res = tap_obs.search(query=query)
+    return res.to_table()
+
+
 if __name__ == '__main__':
+    verbose = False
     args = arg_parse()
     ra = float(args.ra) * u.deg
     dec = float(args.dec) * u.deg
     radius = (float(args.radius) * u.arcmin).to(u.deg)
+    n = int(args.n)
+    out = args.out
     ra_min = (ra - radius).value
     ra_max = (ra + radius).value
     dec_min = (dec - radius).value
     dec_max = (dec + radius).value
-    n = 100
 
-    query = """
-    SELECT TOP {} object, ra, dec, prog_id, instrument, telescope, exp_start, exposure, mjd_obs, dp_cat
-    from dbo.raw
-    where ra between {} and {}
-      and dec between {} and {}
-      and dp_cat='SCIENCE'
-      and (instrument='ESPRESSO' or instrument='HARPS' or instrument='FEROS')
-    """.format(n, ra_min, ra_max, dec_min, dec_max)
-    print(query)
-    res = tap_obs.search(query=query)
-    print(res)
+    res = do_query(n, ra_min, ra_max, dec_min, dec_max)
+    res.write(f'{out}.csv', format='ascii.ecsv')
