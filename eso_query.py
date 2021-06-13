@@ -17,7 +17,11 @@ def arg_parse():
     return p.parse_args()
 
 
-def do_query(n, ra_min, ra_max, dec_min, dec_max):
+def do_query(n, ra, dec, radius):
+    ra_min = ra - radius
+    ra_max = ra + radius
+    dec_min = dec - radius
+    dec_max = dec + radius
     query = """
     SELECT TOP {} target, ra, dec, prog_id, instrument, telescope, exp_start, exposure, mjd_obs, dp_cat, datalink_url
     from dbo.raw
@@ -43,5 +47,5 @@ if __name__ == '__main__':
     dec_min = (dec - radius).value
     dec_max = (dec + radius).value
 
-    res = do_query(n, ra_min, ra_max, dec_min, dec_max)
+    res = do_query(n, ra, dec, radius)
     res.write(f'{out}.dat', format='ascii.ecsv')
