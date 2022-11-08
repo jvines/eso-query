@@ -18,7 +18,7 @@ def arg_parse():
     p.add_argument('-ra', help='Target RA in degrees.', type=float)
     p.add_argument('-dec', help='Target DEC in degrees.', type=float)
     p.add_argument('-radius', help='Box search radius in arcminutes.',
-                   default=2, type=float)
+                   default=3, type=float)
     p.add_argument('-out', help='Output directory.', default='./query')
     p.add_argument('-t', '--tic-id', required=False, help='TIC ID.', type=int)
     return p.parse_args()
@@ -71,7 +71,6 @@ def do_query(ra, dec, radius):
                 point('', sub.ra, sub.dec),
                 circle('', {ra}, {dec}, {radius}))
     """
-    print(query)
     res = tap_obs.search(query=query)
     return res.to_table()
 
@@ -79,7 +78,6 @@ def do_query(ra, dec, radius):
 if __name__ == '__main__':
     verbose = False
     args = arg_parse()
-    # import pdb; pdb.set_trace()
     if args.tic_id is None:
         ra = float(args.ra) * u.deg
         dec = float(args.dec) * u.deg
