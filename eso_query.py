@@ -62,8 +62,15 @@ def text_similarity(s1, s2):
     return SequenceMatcher(None, s1, s2).ratio()
 
 
+def get_tic_id(target):
+    catalog = Catalogs.query_object(target,
+                                    radius=1e-3, catalog='TIC')
+    return f'TIC-{catalog["ID"][0]}'
+
+
 def summarize_multiple_observations(table):
     table['object'] = list(map(lambda x: fix_tic(x), table['object']))
+    table['target'] = list(map(lambda x: fix_tic(x), table['target']))
     text = ''
     for target in np.unique(table['object']):
         mask = table['object'] == target
@@ -78,12 +85,16 @@ def summarize_multiple_observations(table):
         pis = []
         pi_cois = np.sort(table[mask]['pi_coi'])
         for pi in pi_cois:
+            pi = pi.split('/')[0]
             if pi not in pis:
                 if len(list(filter(lambda x: text_similarity(pi, x) > .9, pis))):
                     continue
                 pis.append(pi)
         pis = f"{';'.join(pis)}"
-        text += f'{target}|({instruments})|{start_date} -> {end_date} [{n_points} points]|({pis})\n'
+        target_name = table[mask]['target'][0]
+        if 'TIC' not in target_name:
+            target_name = get_tic_id(target_name)
+        text += f'{target_name}|({instruments})|{start_date} -> {end_date} [{n_points} points]|({pis})\n'
     return text
 
 
@@ -120,7 +131,7 @@ def do_query(ra, dec, radius):
 
 
 def build_circle_condition(ras, decs, radius):
-    template = "1=CONTAINS(point('', sub.ra, sub.dec), circle('', {}, {}, {}))"
+    template = "1=CONTAINS(point('', ra, dec), circle('', {}, {}, {}))"
     condition = template.format(ras[0].value, decs[0].value, radius)
     for ra, dec in zip(ras[1:], decs[1:]):
         condition += ' OR ' + template.format(ra.value, dec.value, radius)
@@ -130,36 +141,32 @@ def build_circle_condition(ras, decs, radius):
 def do_multiple_query(ra, dec, radius):
     condition = build_circle_condition(ra, dec, radius)
     query = f"""
-    SELECT *
-    FROM
-    (
-        SELECT
-            target
-            , object
-            , ra
-            , dec
-            , pi_coi
-            , prog_id
-            , instrument
-            , telescope
-            , exp_start
-            , exposure
-            , mjd_obs
-        --    , dp_cat
-            , datalink_url
-        FROM dbo.raw
-        WHERE dp_cat='SCIENCE'
-            AND (instrument='ESPRESSO' OR instrument='HARPS' OR instrument='FEROS')
-            AND dec BETWEEN -90 AND 90
-    ) AS sub
-    WHERE {condition}
+    SELECT
+        target
+        , object
+        , ra
+        , dec
+        , pi_coi
+        , prog_id
+        , instrument
+        , telescope
+        , exp_start
+        , exposure
+        , mjd_obs
+    --    , dp_cat
+        , datalink_url
+    FROM dbo.raw
+    WHERE dp_cat='SCIENCE'
+        AND (instrument='ESPRESSO' OR instrument='HARPS' OR instrument='FEROS')
+        AND dec BETWEEN -90 AND 90
+        AND ({condition})
     """
     res = tap_obs.search(query=query)
     return res.to_table()
 
 
 def fix_tic(tic_id):
-    pattern = r'(TIC)(\d+)'
+    pattern = r'(TIC)\s?(\d+)'
     replacement = r"\1-\2"
     return re.sub(pattern, replacement, tic_id)
 
@@ -167,7 +174,6 @@ def fix_tic(tic_id):
 def get_tic_id_ra_dec(tic_id):
     catalog = Catalogs.query_object(f'TIC {tic_id}',
                                     radius=1e-3, catalog='TIC')
-    print(catalog)
     return catalog['ra'][0] * u.deg, catalog['dec'][0] * u.deg
 
 
