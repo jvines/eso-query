@@ -6,6 +6,7 @@ from astroquery.mast import Catalogs
 import numpy as np
 from astropy.time import Time
 from difflib import SequenceMatcher
+import re
 
 ESO_TAP_OBS = 'http://archive.eso.org/tap_obs'
 tap_obs = tap.TAPService(ESO_TAP_OBS)
@@ -61,20 +62,21 @@ def text_similarity(s1, s2):
     return SequenceMatcher(None, s1, s2).ratio()
 
 
-def summarize_multiple_observations(tables):
+def summarize_multiple_observations(table):
+    table['object'] = list(map(lambda x: fix_tic(x), table['object']))
     text = ''
-    for table in tables:
-        target = table['object'][0]
-        n_points = len(table)
-        instruments = ';'.join(np.unique(table['instrument']))
-        start_date = (Time(np.min(table['mjd_obs']), format='mjd')
+    for target in np.unique(table['object']):
+        mask = table['object'] == target
+        n_points = len(table[mask])
+        instruments = ';'.join(np.unique(table[mask]['instrument']))
+        start_date = (Time(np.min(table[mask]['mjd_obs']), format='mjd')
                       .datetime
                       .strftime('%Y-%m-%d'))
-        end_date = (Time(np.max(table['mjd_obs']), format='mjd')
+        end_date = (Time(np.max(table[mask]['mjd_obs']), format='mjd')
                       .datetime
                       .strftime('%Y-%m-%d'))
         pis = []
-        pi_cois = np.sort(table['pi_coi'])
+        pi_cois = np.sort(table[mask]['pi_coi'])
         for pi in pi_cois:
             if pi not in pis:
                 if len(list(filter(lambda x: text_similarity(pi, x) > .9, pis))):
@@ -83,7 +85,7 @@ def summarize_multiple_observations(tables):
         pis = f"{';'.join(pis)}"
         text += f'{target}|({instruments})|{start_date} -> {end_date} [{n_points} points]|({pis})\n'
     return text
-# FEROS 2023-11-30 -> 2024-04-06 [6 points] (HOBSON, M, TRIFONOV, T)
+
 
 def do_query(ra, dec, radius):
     query = f"""
@@ -117,30 +119,77 @@ def do_query(ra, dec, radius):
     return res.to_table()
 
 
+def build_circle_condition(ras, decs, radius):
+    template = "1=CONTAINS(point('', sub.ra, sub.dec), circle('', {}, {}, {}))"
+    condition = template.format(ras[0].value, decs[0].value, radius)
+    for ra, dec in zip(ras[1:], decs[1:]):
+        condition += ' OR ' + template.format(ra.value, dec.value, radius)
+    return condition
+
+
+def do_multiple_query(ra, dec, radius):
+    condition = build_circle_condition(ra, dec, radius)
+    query = f"""
+    SELECT *
+    FROM
+    (
+        SELECT
+            target
+            , object
+            , ra
+            , dec
+            , pi_coi
+            , prog_id
+            , instrument
+            , telescope
+            , exp_start
+            , exposure
+            , mjd_obs
+        --    , dp_cat
+            , datalink_url
+        FROM dbo.raw
+        WHERE dp_cat='SCIENCE'
+            AND (instrument='ESPRESSO' OR instrument='HARPS' OR instrument='FEROS')
+            AND dec BETWEEN -90 AND 90
+    ) AS sub
+    WHERE {condition}
+    """
+    res = tap_obs.search(query=query)
+    return res.to_table()
+
+
+def fix_tic(tic_id):
+    pattern = r'(TIC)(\d+)'
+    replacement = r"\1-\2"
+    return re.sub(pattern, replacement, tic_id)
+
+
 def get_tic_id_ra_dec(tic_id):
     catalog = Catalogs.query_object(f'TIC {tic_id}',
                                     radius=1e-3, catalog='TIC')
     return catalog['ra'][0] * u.deg, catalog['dec'][0] * u.deg
 
 
+
+
+
 if __name__ == '__main__':
     args = arg_parse()
-    ra_dec_pairs = []
+    ras, decs = [], []
     if args.tic_id is None:
         ra = float(args.ra) * u.deg
         dec = float(args.dec) * u.deg
     elif type(args.tic_id) == list:
         for tic_id in args.tic_id:
             ra, dec = get_tic_id_ra_dec(tic_id)
-            ra_dec_pairs.append((ra, dec))
+            ras.append(ra)
+            decs.append(dec)
     else:
         ra, dec = get_tic_id_ra_dec(args.tic_id)
     radius = (float(args.radius) * u.arcmin).to(u.deg)
     out = args.out
-    results = []
-    if len(ra_dec_pairs):
-        for ra, dec in ra_dec_pairs:
-            results.append(do_query(ra.value, dec.value, radius.value))
+    if len(ras) and len(decs):
+        results = do_multiple_query(ras, decs, radius.value)
         print(summarize_multiple_observations(results))
     else:
         resuls = do_query(ra.value, dec.value, radius.value)
