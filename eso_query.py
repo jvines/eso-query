@@ -167,23 +167,22 @@ def fix_tic(tic_id):
 def get_tic_id_ra_dec(tic_id):
     catalog = Catalogs.query_object(f'TIC {tic_id}',
                                     radius=1e-3, catalog='TIC')
+    print(catalog)
     return catalog['ra'][0] * u.deg, catalog['dec'][0] * u.deg
 
 
-
+def get_multiple_tic_ids_ra_dec(tic_ids):
+    catalog = Catalogs.query_criteria(catalog='TIC', ID=tic_ids)
+    return catalog['ra'] * u.deg, catalog['dec'] * u.deg
 
 
 if __name__ == '__main__':
     args = arg_parse()
-    ras, decs = [], []
     if args.tic_id is None:
         ra = float(args.ra) * u.deg
         dec = float(args.dec) * u.deg
     elif type(args.tic_id) == list:
-        for tic_id in args.tic_id:
-            ra, dec = get_tic_id_ra_dec(tic_id)
-            ras.append(ra)
-            decs.append(dec)
+        ras, decs = get_multiple_tic_ids_ra_dec(args.tic_id)
     else:
         ra, dec = get_tic_id_ra_dec(args.tic_id)
     radius = (float(args.radius) * u.arcmin).to(u.deg)
