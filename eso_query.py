@@ -87,13 +87,11 @@ def summarize_multiple_observations(table):
         for pi in pi_cois:
             pi = pi.split('/')[0]
             if pi not in pis:
-                if len(list(filter(lambda x: text_similarity(pi, x) > .9, pis))):
+                if len(list(filter(lambda x: text_similarity(pi, x) > .75, pis))):
                     continue
                 pis.append(pi)
         pis = f"{';'.join(pis)}"
         target_name = table[mask]['target'][0]
-        if 'TIC' not in target_name:
-            target_name = get_tic_id(target_name)
         text += f'{target_name}|({instruments})|{start_date} -> {end_date} [{n_points} points]|({pis})\n'
     return text
 
@@ -166,9 +164,12 @@ def do_multiple_query(ra, dec, radius):
 
 
 def fix_tic(tic_id):
-    pattern = r'(TIC)\s?(\d+)'
-    replacement = r"\1-\2"
-    return re.sub(pattern, replacement, tic_id)
+    if 'TIC' in tic_id:
+        pattern = r'(TIC)\s?(\d+)'
+        replacement = r"\1-\2"
+        return re.sub(pattern, replacement, tic_id)
+    else:
+        return get_tic_id(tic_id)
 
 
 def get_tic_id_ra_dec(tic_id):
