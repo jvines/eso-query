@@ -6,6 +6,7 @@ from astroquery.mast import Catalogs
 import numpy as np
 from astropy.time import Time
 from difflib import SequenceMatcher
+from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
 import re
 
 ESO_TAP_OBS = 'http://archive.eso.org/tap_obs'
@@ -70,7 +71,7 @@ def get_tic_id(target):
 
 def summarize_multiple_observations(table):
     table['object'] = list(map(lambda x: fix_tic(x), table['object']))
-    table['target'] = list(map(lambda x: fix_tic(x), table['target']))
+
     text = ''
     for target in np.unique(table['object']):
         mask = table['object'] == target
@@ -168,11 +169,22 @@ def fix_tic(tic_id):
         pattern = r'(TIC)\s?(\d+)'
         replacement = r"\1-\2"
         return re.sub(pattern, replacement, tic_id)
+    elif 'TOI' in tic_id:
+        return get_tic_id_from_toi(tic_id.split('-')[-1])
     else:
-        return get_tic_id(tic_id)
+        try:
+            return get_tic_id(tic_id)
+        except:
+            return tic_id
 
 
-def get_tic_id_ra_dec(tic_id):
+def get_tic_id_from_toi(toi):
+    catalog = NasaExoplanetArchive.query_criteria(table='toi',
+                                                  where=f'toipfx = {toi}')
+    return f'TIC-{catalog["tid"][0]}'
+
+
+def get_ra_dec_from_tic_id(tic_id):
     catalog = Catalogs.query_object(f'TIC {tic_id}',
                                     radius=1e-3, catalog='TIC')
     return catalog['ra'][0] * u.deg, catalog['dec'][0] * u.deg
@@ -191,7 +203,7 @@ if __name__ == '__main__':
     elif type(args.tic_id) == list:
         ras, decs = get_multiple_tic_ids_ra_dec(args.tic_id)
     else:
-        ra, dec = get_tic_id_ra_dec(args.tic_id)
+        ra, dec = get_ra_dec_from_tic_id(args.tic_id)
     radius = (float(args.radius) * u.arcmin).to(u.deg)
     out = args.out
     if len(ras) and len(decs):
